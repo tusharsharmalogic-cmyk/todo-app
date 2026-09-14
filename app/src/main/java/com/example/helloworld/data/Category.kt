@@ -26,7 +26,15 @@ data class Category(
             Category("study", "Study", "#9C27B0")
         )
 
-        fun byId(id: String): Category =
-            PRESETS.firstOrNull { it.id == id } ?: DEFAULT
+        val COLOR_CHOICES = listOf(
+            "#6750A4", "#2196F3", "#4CAF50", "#FF9800",
+            "#E91E63", "#9C27B0", "#009688", "#F44336",
+            "#3F51B5", "#795548", "#607D8B", "#FF5722"
+        )
+
+        fun all(custom: List<Category>): List<Category> = PRESETS + custom
+
+        fun byId(id: String, custom: List<Category> = emptyList()): Category =
+            (PRESETS + custom).firstOrNull { it.id == id } ?: DEFAULT
     }
 }

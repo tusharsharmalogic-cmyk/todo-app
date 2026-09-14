@@ -52,6 +52,7 @@ fun StatsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
     val done = todos.count { it.isDone }
     val overdue = todos.count { it.isOverdue }
     val completionRate = if (total == 0) 0f else done.toFloat() / total
+    val isEmpty = total == 0
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -96,36 +97,50 @@ fun StatsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "${(completionRate * 100).toInt()}%",
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = "Completion Rate",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(10.dp)
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(MaterialTheme.colorScheme.surface)
-                    ) {
+                    if (isEmpty) {
+                        Text(
+                            text = "No Task",
+                            style = MaterialTheme.typography.displayLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Add some tasks to see stats",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    } else {
+                        Text(
+                            text = "${(completionRate * 100).toInt()}%",
+                            style = MaterialTheme.typography.displayLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Completion Rate",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(Modifier.height(12.dp))
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(completionRate.coerceIn(0f, 1f))
+                                .fillMaxWidth()
                                 .height(10.dp)
                                 .clip(RoundedCornerShape(5.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(GradientStart, GradientEnd)
+                                .background(MaterialTheme.colorScheme.surface)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(completionRate.coerceIn(0f, 1f))
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(GradientStart, GradientEnd)
+                                        )
                                     )
-                                )
-                        )
+                            )
+                        }
                     }
                 }
             }

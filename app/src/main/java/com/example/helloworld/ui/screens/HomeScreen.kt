@@ -19,12 +19,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -35,7 +39,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -47,18 +50,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -70,7 +73,6 @@ import com.example.helloworld.ui.theme.GradientStart
 import com.example.helloworld.ui.theme.parseHexColor
 import com.example.helloworld.viewmodel.FilterMode
 import com.example.helloworld.viewmodel.TodoViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,9 +88,11 @@ fun HomeScreen(
     val query by viewModel.searchQuery.collectAsState()
     val catFilter by viewModel.categoryFilter.collectAsState()
     val lastDeleted by viewModel.lastDeleted.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+
+    var searchOpen by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(lastDeleted) {
         val item = lastDeleted ?: return@LaunchedEffect
@@ -112,37 +116,52 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                        .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
                         .background(Brush.linearGradient(listOf(GradientStart, GradientEnd)))
-                        .padding(horizontal = 20.dp, vertical = 20.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "My Tasks",
-                                    style = MaterialTheme.typography.headlineMedium,
+                                    style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
-                                Spacer(Modifier.height(2.dp))
                                 val active = todos.count { !it.isDone }
                                 val overdue = todos.count { it.isOverdue }
                                 Text(
                                     text = "$active active • ${todos.size} total" +
                                         if (overdue > 0) " • $overdue overdue" else "",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = Color.White.copy(alpha = 0.85f)
                                 )
                             }
-                            IconButton(onClick = onStatsClick) {
+                            IconButton(
+                                onClick = { searchOpen = !searchOpen },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    if (searchOpen) Icons.Rounded.Close else Icons.Rounded.Search,
+                                    contentDescription = "Search",
+                                    tint = Color.White
+                                )
+                            }
+                            IconButton(
+                                onClick = onStatsClick,
+                                modifier = Modifier.size(38.dp)
+                            ) {
                                 Icon(
                                     Icons.Rounded.Assessment,
                                     contentDescription = "Stats",
                                     tint = Color.White
                                 )
                             }
-                            IconButton(onClick = onSettingsClick) {
+                            IconButton(
+                                onClick = onSettingsClick,
+                                modifier = Modifier.size(38.dp)
+                            ) {
                                 Icon(
                                     Icons.Rounded.Settings,
                                     contentDescription = "Settings",
@@ -150,22 +169,56 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        Spacer(Modifier.height(14.dp))
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = viewModel::setSearch,
-                            placeholder = { Text("Search tasks...") },
-                            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        AnimatedVisibility(visible = searchOpen) {
+                            Column {
+                                Spacer(Modifier.height(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp)
+                                        .clip(RoundedCornerShape(21.dp))
+                                        .background(Color.White.copy(alpha = 0.22f))
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Rounded.Search,
+                                            contentDescription = null,
+                                            tint = Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Box(Modifier.weight(1f)) {
+                                            if (query.isEmpty()) {
+                                                Text(
+                                                    "Search tasks...",
+                                                    color = Color.White.copy(alpha = 0.7f),
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            }
+                                            BasicTextField(
+                                                value = query,
+                                                onValueChange = viewModel::setSearch,
+                                                singleLine = true,
+                                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                                    color = Color.White
+                                                ),
+                                                cursorBrush = SolidColor(Color.White),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 FilterRow(filter = filter, onFilterChange = viewModel::setFilter)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 CategoryRow(
+                    categories = categories,
                     selected = catFilter,
                     onSelect = viewModel::setCategoryFilter
                 )
@@ -175,7 +228,7 @@ fun HomeScreen(
             FloatingActionButton(
                 onClick = { onAddClick(catFilter ?: Category.DEFAULT_ID) },
                 containerColor = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(18.dp)
             ) {
                 Icon(
                     Icons.Rounded.Add,
@@ -202,6 +255,7 @@ fun HomeScreen(
             } else {
                 ReorderableTodoList(
                     todos = todos,
+                    categories = categories,
                     filter = filter,
                     onEditClick = onEditClick,
                     onToggle = viewModel::toggleDone,
@@ -214,10 +268,10 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReorderableTodoList(
     todos: List<com.example.helloworld.data.Todo>,
+    categories: List<Category>,
     filter: FilterMode,
     onEditClick: (Long) -> Unit,
     onToggle: (Long) -> Unit,
@@ -226,9 +280,10 @@ fun ReorderableTodoList(
     onClearCompleted: () -> Unit
 ) {
     val listState = rememberLazyListState()
-    var draggingIndex by remember { mutableIntStateOf(-1) }
+    var draggingId by remember { mutableStateOf<Long?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    var itemHeight by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val spacingPx = with(density) { 10.dp.toPx() }
 
     LazyColumn(
         state = listState,
@@ -237,46 +292,59 @@ fun ReorderableTodoList(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         itemsIndexed(todos, key = { _, t -> t.id }) { index, todo ->
-            val isDragging = index == draggingIndex
+            val isDragging = draggingId == todo.id
             val translation = if (isDragging) dragOffset else 0f
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer { translationY = translation }
                     .zIndex(if (isDragging) 1f else 0f)
+                    .graphicsLayer { translationY = translation }
                     .pointerInput(todo.id) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
-                                draggingIndex = index
+                                draggingId = todo.id
                                 dragOffset = 0f
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 dragOffset += dragAmount.y
-                                if (itemHeight <= 0f) itemHeight = size.height.toFloat() + 24f
-                                if (dragOffset > itemHeight / 2) {
-                                    val target = index + 1
-                                    if (target < todos.size) {
-                                        onMove(index, target)
-                                        draggingIndex = target
-                                        dragOffset -= itemHeight
-                                    }
-                                } else if (dragOffset < -itemHeight / 2) {
-                                    val target = index - 1
-                                    if (target >= 0) {
-                                        onMove(index, target)
-                                        draggingIndex = target
-                                        dragOffset += itemHeight
-                                    }
+
+                                val info = listState.layoutInfo
+                                val myInfo = info.visibleItemsInfo
+                                    .firstOrNull { it.key == todo.id }
+                                    ?: return@detectDragGesturesAfterLongPress
+
+                                val currentIdx = todos.indexOfFirst { it.id == todo.id }
+                                if (currentIdx < 0) return@detectDragGesturesAfterLongPress
+
+                                val goingDown = dragOffset > 0f
+                                val neighborIndex = currentIdx + if (goingDown) 1 else -1
+                                if (neighborIndex !in todos.indices)
+                                    return@detectDragGesturesAfterLongPress
+
+                                val neighborId = todos[neighborIndex].id
+                                val neighborInfo = info.visibleItemsInfo
+                                    .firstOrNull { it.key == neighborId }
+                                    ?: return@detectDragGesturesAfterLongPress
+
+                                val myCenter = myInfo.offset + myInfo.size / 2f + dragOffset
+                                val neighborCenter = neighborInfo.offset + neighborInfo.size / 2f
+
+                                if (goingDown && myCenter > neighborCenter) {
+                                    onMove(currentIdx, neighborIndex)
+                                    dragOffset -= (myInfo.size + spacingPx)
+                                } else if (!goingDown && myCenter < neighborCenter) {
+                                    onMove(currentIdx, neighborIndex)
+                                    dragOffset += (myInfo.size + spacingPx)
                                 }
                             },
                             onDragEnd = {
-                                draggingIndex = -1
+                                draggingId = null
                                 dragOffset = 0f
                             },
                             onDragCancel = {
-                                draggingIndex = -1
+                                draggingId = null
                                 dragOffset = 0f
                             }
                         )
@@ -289,6 +357,7 @@ fun ReorderableTodoList(
                 ) {
                     TodoItem(
                         todo = todo,
+                        categories = categories,
                         onClick = { onEditClick(todo.id) },
                         onToggle = { onToggle(todo.id) },
                         onDelete = { onDelete(todo.id) }
@@ -303,7 +372,7 @@ fun ReorderableTodoList(
                 Button(
                     onClick = onClearCompleted,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Rounded.DeleteSweep, null)
                     Spacer(Modifier.width(8.dp))
@@ -337,8 +406,12 @@ fun FilterRow(filter: FilterMode, onFilterChange: (FilterMode) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoryRow(selected: String?, onSelect: (String?) -> Unit) {
-    androidx.compose.foundation.lazy.LazyRow(
+fun CategoryRow(
+    categories: List<Category>,
+    selected: String?,
+    onSelect: (String?) -> Unit
+) {
+    LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -350,8 +423,7 @@ fun CategoryRow(selected: String?, onSelect: (String?) -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             )
         }
-        items(Category.PRESETS.size) { idx ->
-            val cat = Category.PRESETS[idx]
+        items(categories, key = { it.id }) { cat ->
             val isSel = selected == cat.id
             FilterChip(
                 selected = isSel,

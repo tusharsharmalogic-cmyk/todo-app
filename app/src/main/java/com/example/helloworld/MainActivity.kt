@@ -46,7 +46,8 @@ class MainActivity : ComponentActivity() {
             ModernTodoTheme(
                 themeMode = settings.themeMode,
                 accentHex = settings.accentHex,
-                dynamicColor = settings.dynamicColor
+                dynamicColor = settings.dynamicColor,
+                fontScale = settings.fontScale
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

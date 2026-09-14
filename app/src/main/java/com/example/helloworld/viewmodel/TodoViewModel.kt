@@ -38,7 +38,18 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
     private val _all = MutableStateFlow<List<Todo>>(emptyList())
     val allTodos: StateFlow<List<Todo>> = _all
 
+    val categories: StateFlow<List<Category>> = repo.settings
+        .combine(_all) { s, _ -> Category.all(s.customCategories) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Category.PRESETS)
+
     init {
+        viewModelScope.launch {
+            repo.settings.collect { s ->
+                _filter.value = FilterMode.values()
+                    .getOrElse(s.lastFilterOrdinal) { FilterMode.All }
+                _categoryFilter.value = s.lastCategoryFilter
+            }
+        }
         viewModelScope.launch {
             repo.todos.collect { list ->
                 _all.value = list.sortedBy { it.orderIndex }
@@ -62,8 +73,20 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
             result
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun setFilter(mode: FilterMode) { _filter.value = mode }
-    fun setCategoryFilter(id: String?) { _categoryFilter.value = id }
+    fun setFilter(mode: FilterMode) {
+        _filter.value = mode
+        viewModelScope.launch {
+            repo.saveSettings(settings.value.copy(lastFilterOrdinal = mode.ordinal))
+        }
+    }
+
+    fun setCategoryFilter(id: String?) {
+        _categoryFilter.value = id
+        viewModelScope.launch {
+            repo.saveSettings(settings.value.copy(lastCategoryFilter = id))
+        }
+    }
+
     fun setSearch(q: String) { _searchQuery.value = q }
 
     fun getById(id: Long): Todo? = _all.value.find { it.id == id }
@@ -78,19 +101,18 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
         categoryId: String,
         dueDate: Long?,
         reminderMinutes: Int?
-    ) {
-        viewModelScope.launch {
-            val item = Todo(
-                title = title.trim(),
-                description = description.trim(),
-                priority = priority,
-                categoryId = categoryId,
-                dueDate = dueDate,
-                reminderMinutes = reminderMinutes,
-                orderIndex = nextOrder()
-            )
-            repo.save(_all.value + item)
-        }
+    ): Long {
+        val item = Todo(
+            title = title.trim(),
+            description = description.trim(),
+            priority = priority,
+            categoryId = categoryId,
+            dueDate = dueDate,
+            reminderMinutes = reminderMinutes,
+            orderIndex = nextOrder()
+        )
+        viewModelScope.launch { repo.save(_all.value + item) }
+        return item.id
     }
 
     fun updateTodo(
@@ -148,7 +170,7 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
 
     fun moveTodo(from: Int, to: Int) {
         val list = _all.value.toMutableList()
-        if (from !in list.indices || to !in list.indices) return
+        if (from !in list.indices || to !in list.indices || from == to) return
         val item = list.removeAt(from)
         list.add(to, item)
         val reindexed = list.mapIndexed { idx, t -> t.copy(orderIndex = idx) }
@@ -159,21 +181,38 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repo.saveSettings(s) }
     }
 
+    fun addCategory(name: String, colorHex: String) {
+        val cat = Category(
+            id = "custom_" + System.currentTimeMillis(),
+            name = name.trim(),
+            colorHex = colorHex
+        )
+        viewModelScope.launch {
+            repo.saveSettings(
+                settings.value.copy(
+                    customCategories = settings.value.customCategories + cat
+                )
+            )
+        }
+    }
+
+    fun deleteCategory(id: String) {
+        // reassign todos with this category to default
+        viewModelScope.launch {
+            repo.save(_all.value.map {
+                if (it.categoryId == id) it.copy(categoryId = Category.DEFAULT_ID) else it
+            })
+            repo.saveSettings(
+                settings.value.copy(
+                    customCategories = settings.value.customCategories.filterNot { it.id == id }
+                )
+            )
+        }
+    }
+
     // Stats
     fun totalCount(): Int = _all.value.size
     fun activeCount(): Int = _all.value.count { !it.isDone }
     fun completedCount(): Int = _all.value.count { it.isDone }
     fun overdueCount(): Int = _all.value.count { it.isOverdue }
-
-    fun completionsLast7Days(): List<Int> {
-        // simple approximation: count completions per day using createdAt fallback
-        val dayMs = 24 * 60 * 60 * 1000L
-        val now = System.currentTimeMillis()
-        val result = IntArray(7)
-        _all.value.filter { it.isDone }.forEach { t ->
-            val diff = ((now - t.createdAt) / dayMs).toInt()
-            if (diff in 0..6) result[6 - diff]++
-        }
-        return result.toList()
-    }
 }

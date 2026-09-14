@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +56,7 @@ import java.util.Locale
 @Composable
 fun TodoItem(
     todo: Todo,
+    categories: List<Category>,
     onClick: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -75,22 +75,17 @@ fun TodoItem(
         0 -> PriorityLow
         else -> PriorityMedium
     }
-    val catColor = parseHexColor(Category.byId(todo.categoryId).colorHex)
+    val cat = Category.byId(todo.categoryId, categories)
+    val catColor = parseHexColor(cat.colorHex)
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
                 onDelete()
-                true
+                false
             } else false
         }
     )
-
-    LaunchedEffect(todo.id) {
-        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-            dismissState.reset()
-        }
-    }
 
     SwipeToDismissBox(
         state = dismissState,
@@ -125,7 +120,7 @@ fun TodoItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(14.dp),
+                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -138,7 +133,7 @@ fun TodoItem(
 
                 IconButton(
                     onClick = onToggle,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(30.dp)
                 ) {
                     Icon(
                         imageVector = if (todo.isDone) Icons.Rounded.CheckCircle
@@ -149,7 +144,7 @@ fun TodoItem(
                     )
                 }
 
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(8.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -181,7 +176,7 @@ fun TodoItem(
                             color = catColor.copy(alpha = 0.18f)
                         ) {
                             Text(
-                                text = Category.byId(todo.categoryId).name,
+                                text = cat.name,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = catColor,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -202,6 +197,18 @@ fun TodoItem(
                             )
                         }
                     }
+                }
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
