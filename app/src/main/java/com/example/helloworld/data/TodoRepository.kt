@@ -13,11 +13,12 @@ private val Context.dataStore by preferencesDataStore(name = "todo_prefs")
 
 class TodoRepository(private val context: Context) {
 
-    private val KEY = stringPreferencesKey("todos_json")
+    private val TODOS_KEY = stringPreferencesKey("todos_json")
+    private val SETTINGS_KEY = stringPreferencesKey("settings_json")
     private val json = Json { ignoreUnknownKeys = true }
 
     val todos: Flow<List<Todo>> = context.dataStore.data.map { prefs ->
-        val raw = prefs[KEY] ?: "[]"
+        val raw = prefs[TODOS_KEY] ?: "[]"
         try {
             json.decodeFromString<List<Todo>>(raw)
         } catch (e: Exception) {
@@ -25,9 +26,24 @@ class TodoRepository(private val context: Context) {
         }
     }
 
+    val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        val raw = prefs[SETTINGS_KEY] ?: "{}"
+        try {
+            json.decodeFromString<AppSettings>(raw)
+        } catch (e: Exception) {
+            AppSettings()
+        }
+    }
+
     suspend fun save(list: List<Todo>) {
         context.dataStore.edit { prefs ->
-            prefs[KEY] = json.encodeToString(list)
+            prefs[TODOS_KEY] = json.encodeToString(list)
+        }
+    }
+
+    suspend fun saveSettings(s: AppSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[SETTINGS_KEY] = json.encodeToString(s)
         }
     }
 }
