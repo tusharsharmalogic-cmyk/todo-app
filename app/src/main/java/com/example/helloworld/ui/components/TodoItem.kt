@@ -24,7 +24,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -32,7 +31,6 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +61,8 @@ fun TodoItem(
     modifier: Modifier = Modifier
 ) {
     val alpha by animateFloatAsState(if (todo.isDone) 0.55f else 1f, label = "alpha")
+
+    // Fix: completed task pe green/surface color, red nahi
     val cardColor by animateColorAsState(
         targetValue = if (todo.isDone)
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -78,12 +78,15 @@ fun TodoItem(
     val cat = Category.byId(todo.categoryId, categories)
     val catColor = parseHexColor(cat.colorHex)
 
+    // Fix: SwipeToDismissBox sirf delete ke liye, confirmValueChange mein false return karo
+    // taaki item apni jagah rahe aur delete callback chale
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
                 onDelete()
-                false
-            } else false
+            }
+            // Always return false - item wapas aata hai, delete ViewModel se hota hai
+            false
         }
     )
 
@@ -91,19 +94,27 @@ fun TodoItem(
         state = dismissState,
         enableDismissFromStartToEnd = false,
         backgroundContent = {
+            // Fix: sirf swipe hone par red background dikhao, normal state mein transparent
+            val bgColor = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.background
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .background(bgColor)
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                Icon(
-                    Icons.Rounded.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onErrorContainer
-                )
+                if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         },
         modifier = modifier
@@ -120,7 +131,8 @@ fun TodoItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+                    // Fix: end padding 6dp se 14dp - delete button hata diya, balanced padding
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -131,7 +143,8 @@ fun TodoItem(
                 )
                 Spacer(Modifier.width(12.dp))
 
-                IconButton(
+                // Toggle/check button
+                androidx.compose.material3.IconButton(
                     onClick = onToggle,
                     modifier = Modifier.size(30.dp)
                 ) {
@@ -199,17 +212,8 @@ fun TodoItem(
                     }
                 }
 
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(38.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                // Fix: Delete IconButton HATA DIYA - sirf swipe se delete hoga
+                // Double delete button issue solve ho gaya
             }
         }
     }

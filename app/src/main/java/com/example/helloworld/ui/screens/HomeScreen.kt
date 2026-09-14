@@ -51,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -281,7 +282,9 @@ fun ReorderableTodoList(
     onClearCompleted: () -> Unit
 ) {
     val listState = rememberLazyListState()
-    var draggingId by remember { mutableStateOf<Long?>(null) }
+
+    // Fix: mutableLongStateOf use karo Long ke liye (performance better)
+    var draggingId by remember { mutableLongStateOf(-1L) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val spacingPx = with(density) { 10.dp.toPx() }
@@ -294,13 +297,20 @@ fun ReorderableTodoList(
     ) {
         itemsIndexed(todos, key = { _, t -> t.id }) { index, todo ->
             val isDragging = draggingId == todo.id
-            val translation = if (isDragging) dragOffset else 0f
 
+            // Fix: AnimatedVisibility HATA DIYA - yahi reorder jitter ka main reason tha
+            // Har reorder pe enter/exit animation trigger ho raha tha
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .zIndex(if (isDragging) 1f else 0f)
-                    .graphicsLayer { translationY = translation }
+                    .graphicsLayer {
+                        translationY = if (isDragging) dragOffset else 0f
+                        // Fix: dragging item ko thoda scale up karo - better visual feedback
+                        scaleX = if (isDragging) 1.03f else 1f
+                        scaleY = if (isDragging) 1.03f else 1f
+                        shadowElevation = if (isDragging) 8f else 0f
+                    }
                     .pointerInput(todo.id) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
@@ -332,38 +342,36 @@ fun ReorderableTodoList(
                                 val myCenter = myInfo.offset + myInfo.size / 2f + dragOffset
                                 val neighborCenter = neighborInfo.offset + neighborInfo.size / 2f
 
-                                if (goingDown && myCenter > neighborCenter) {
+                                // Fix: threshold add kiya - items tabhi swap honge jab
+                                // center clearly cross ho jaye (jitter reduce hoga)
+                                val threshold = neighborInfo.size * 0.3f
+
+                                if (goingDown && myCenter > neighborCenter + threshold) {
                                     onMove(currentIdx, neighborIndex)
                                     dragOffset -= (myInfo.size + spacingPx)
-                                } else if (!goingDown && myCenter < neighborCenter) {
+                                } else if (!goingDown && myCenter < neighborCenter - threshold) {
                                     onMove(currentIdx, neighborIndex)
                                     dragOffset += (myInfo.size + spacingPx)
                                 }
                             },
                             onDragEnd = {
-                                draggingId = null
+                                draggingId = -1L
                                 dragOffset = 0f
                             },
                             onDragCancel = {
-                                draggingId = null
+                                draggingId = -1L
                                 dragOffset = 0f
                             }
                         )
                     }
             ) {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    TodoItem(
-                        todo = todo,
-                        categories = categories,
-                        onClick = { onEditClick(todo.id) },
-                        onToggle = { onToggle(todo.id) },
-                        onDelete = { onDelete(todo.id) }
-                    )
-                }
+                TodoItem(
+                    todo = todo,
+                    categories = categories,
+                    onClick = { onEditClick(todo.id) },
+                    onToggle = { onToggle(todo.id) },
+                    onDelete = { onDelete(todo.id) }
+                )
             }
         }
 
