@@ -94,8 +94,9 @@ fun TodoItem(
         state = dismissState,
         enableDismissFromStartToEnd = false,
         backgroundContent = {
-            // Fix: sirf swipe hone par red background dikhao, normal state mein transparent
-            val bgColor = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+            // currentValue ya targetValue se check karo swipe direction
+            val isSwiping = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
+            val bgColor = if (isSwiping) {
                 MaterialTheme.colorScheme.errorContainer
             } else {
                 MaterialTheme.colorScheme.background
@@ -108,7 +109,7 @@ fun TodoItem(
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                if (isSwiping) {
                     Icon(
                         Icons.Rounded.Delete,
                         contentDescription = "Delete",
