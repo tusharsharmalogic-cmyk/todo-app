@@ -159,7 +159,7 @@ fun TodoItem(
                         imageVector = if (todo.isDone) Icons.Rounded.CheckCircle
                         else Icons.Rounded.RadioButtonUnchecked,
                         contentDescription = "Toggle",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(24.dp)
                     )
                 }
