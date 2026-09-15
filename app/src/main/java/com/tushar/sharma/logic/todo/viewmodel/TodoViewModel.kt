@@ -221,18 +221,63 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteCategory(id: String) {
-        // reassign todos with this category to default
+        val s = settings.value
+        val isPreset = Category.PRESETS.any { it.id == id }
+        // If we're deleting default, promote the first remaining category as new default
+        val remainingAfterDelete = Category.all(
+            s.customCategories, s.categoryOrder, s.hiddenCategories
+        ).filterNot { it.id == id }
+        val newDefaultId = if (id == Category.DEFAULT_ID)
+            remainingAfterDelete.firstOrNull()?.id
+        else null
+
         viewModelScope.launch {
-            repo.save(_all.value.map {
-                if (it.categoryId == id) it.copy(categoryId = Category.DEFAULT_ID) else it
-            })
+            val mapped = _all.value.map { t ->
+                when {
+                    t.categoryId != id -> t
+                    newDefaultId != null -> t.copy(categoryId = newDefaultId)
+                    else -> t.copy(categoryId = Category.DEFAULT_ID)
+                }
+            }
+            repo.save(mapped)
             repo.saveSettings(
-                settings.value.copy(
-                    customCategories = settings.value.customCategories.filterNot { it.id == id }
+                s.copy(
+                    customCategories = s.customCategories.filterNot { it.id == id },
+                    hiddenCategories = if (isPreset) s.hiddenCategories + id else s.hiddenCategories,
+                    categoryOrder = s.categoryOrder.filterNot { it == id }
                 )
             )
         }
     }
+
+    /** Move category at [fromIndex] to [toIndex] within the visible list. */
+    fun moveCategory(fromIndex: Int, toIndex: Int) {
+        val list = categories.value.toMutableList()
+        if (fromIndex !in list.indices || toIndex !in list.indices || fromIndex == toIndex) return
+        val item = list.removeAt(fromIndex)
+        list.add(toIndex, item)
+        viewModelScope.launch {
+            repo.saveSettings(settings.value.copy(categoryOrder = list.map { it.id }))
+        }
+    }
+
+    // -------- App Lock (PIN) --------
+
+    val isLockEnabled: Boolean get() = settings.value.pinCode.isNotEmpty()
+
+    fun setPin(pin: String) {
+        viewModelScope.launch {
+            repo.saveSettings(settings.value.copy(pinCode = pin))
+        }
+    }
+
+    fun clearPin() {
+        viewModelScope.launch {
+            repo.saveSettings(settings.value.copy(pinCode = ""))
+        }
+    }
+
+    fun verifyPin(pin: String): Boolean = settings.value.pinCode == pin
 
     // Stats
     fun totalCount(): Int = _all.value.size

@@ -68,6 +68,9 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsState()
     val categories by viewModel.categories.collectAsState()
     var showAddCategory by remember { mutableStateOf(false) }
+    var showPinSetup by remember { mutableStateOf(false) }
+    var showPinRemove by remember { mutableStateOf(false) }
+    var pinError by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -295,6 +298,50 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
                 }
             }
 
+            // ---- App Lock ----
+            SectionTitle("App Lock")
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (settings.pinCode.isEmpty()) Icons.Rounded.LockOpen
+                            else Icons.Rounded.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (settings.pinCode.isEmpty()) "PIN Lock: Off"
+                                else "PIN Lock: On",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                "Require a 4-digit PIN to open the app",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = settings.pinCode.isNotEmpty(),
+                            onCheckedChange = { enabled ->
+                                if (enabled) showPinSetup = true
+                                else showPinRemove = true
+                            }
+                        )
+                    }
+                }
+            }
+
             // ---- Categories ----
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle("Categories", Modifier.weight(1f))
@@ -310,11 +357,13 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    categories.forEach { cat ->
+                    categories.forEachIndexed { idx, cat ->
+                        val isFirst = idx == 0
+                        val isLast = idx == categories.size - 1
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -329,19 +378,46 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )
-                            val isCustom = cat.id.startsWith("custom_")
-                            if (isCustom) {
-                                IconButton(
-                                    onClick = { viewModel.deleteCategory(cat.id) },
-                                    modifier = Modifier.size(30.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Close,
-                                        contentDescription = "Delete category",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                            IconButton(
+                                onClick = { viewModel.moveCategory(idx, idx - 1) },
+                                enabled = !isFirst,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.KeyboardArrowUp,
+                                    contentDescription = "Move up",
+                                    tint = if (!isFirst) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { viewModel.moveCategory(idx, idx + 1) },
+                                enabled = !isLast,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.KeyboardArrowDown,
+                                    contentDescription = "Move down",
+                                    tint = if (!isLast) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            // Delete: allowed for all except last remaining category
+                            IconButton(
+                                onClick = { viewModel.deleteCategory(cat.id) },
+                                enabled = categories.size > 1,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "Delete category",
+                                    tint = if (categories.size > 1)
+                                        MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -360,6 +436,138 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
             }
         )
     }
+
+    if (showPinSetup) {
+        PinSetupDialog(
+            onDismiss = { showPinSetup = false; pinError = null },
+            onConfirm = { newPin ->
+                viewModel.setPin(newPin)
+                showPinSetup = false
+                pinError = null
+            }
+        )
+    }
+
+    if (showPinRemove) {
+        PinVerifyDialog(
+            title = "Enter current PIN",
+            onDismiss = { showPinRemove = false; pinError = null },
+            onSubmit = { pin ->
+                if (viewModel.verifyPin(pin)) {
+                    viewModel.clearPin()
+                    showPinRemove = false
+                    pinError = null
+                } else {
+                    pinError = "Wrong PIN"
+                    false
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PinSetupDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var pin1 by remember { mutableStateOf("") }
+    var pin2 by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set 4-digit PIN") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = pin1,
+                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin1 = it },
+                    label = { Text("New PIN") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = pin2,
+                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin2 = it },
+                    label = { Text("Confirm PIN") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (pin1.isNotEmpty() && pin2.isNotEmpty() && pin1 != pin2) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "PINs don't match",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (pin1.length == 4 && pin1 == pin2) onConfirm(pin1)
+                },
+                enabled = pin1.length == 4 && pin1 == pin2
+            ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun PinVerifyDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Boolean
+) {
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = {
+                        if (it.length <= 4 && it.all { c -> c.isDigit() }) {
+                            pin = it; error = false
+                        }
+                    },
+                    label = { Text("PIN") },
+                    singleLine = true,
+                    isError = error,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Wrong PIN",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (pin.length == 4) {
+                        val ok = onSubmit(pin)
+                        if (!ok) error = true
+                    }
+                },
+                enabled = pin.length == 4
+            ) { Text("Confirm") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable

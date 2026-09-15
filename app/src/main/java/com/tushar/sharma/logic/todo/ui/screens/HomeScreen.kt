@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -63,6 +64,7 @@ import com.tushar.sharma.logic.todo.ui.theme.GradientStart
 import com.tushar.sharma.logic.todo.ui.theme.parseHexColor
 import com.tushar.sharma.logic.todo.viewmodel.FilterMode
 import com.tushar.sharma.logic.todo.viewmodel.TodoViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +84,18 @@ fun HomeScreen(
 
     var searchOpen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+
+    // Scroll preservation: when a toggle changes list order, restore viewport to
+    // the same index/offset so the screen doesn't chase the item to the bottom.
+    var pendingScroll by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(todos) {
+        pendingScroll?.let { (idx, off) ->
+            listState.scrollToItem(idx, off)
+            pendingScroll = null
+        }
+    }
 
     LaunchedEffect(lastDeleted) {
         val item = lastDeleted ?: return@LaunchedEffect
@@ -262,6 +276,7 @@ fun TodoList(
     todos: List<com.tushar.sharma.logic.todo.data.Todo>,
     categories: List<Category>,
     filter: FilterMode,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     onEditClick: (Long) -> Unit,
     onToggle: (Long) -> Unit,
     onDelete: (Long) -> Unit,
@@ -269,11 +284,12 @@ fun TodoList(
     onClearCompleted: () -> Unit
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        itemsIndexed(todos) { index, todo ->
+        itemsIndexed(todos, key = { _, t -> t.id }) { index, todo ->
             TodoItem(
                 todo = todo,
                 categories = categories,
@@ -334,11 +350,13 @@ fun FilterRow(filter: FilterMode, onFilterChange: (FilterMode) -> Unit) {
 fun CategoryRow(
     categories: List<Category>,
     selected: String?,
-    onSelect: (String?) -> Unit
+    onSelect: (String?) -> Unit,
+    onCopyAll: (() -> Unit)? = null
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         item {
             FilterChip(
@@ -365,6 +383,23 @@ fun CategoryRow(
                     )
                 }
             )
+        }
+        if (onCopyAll != null) {
+            item {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onCopyAll,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        androidx.compose.material.icons.Icons.Rounded.ContentCopy,
+                        contentDescription = "Copy all",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Copy all", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
     }
 }

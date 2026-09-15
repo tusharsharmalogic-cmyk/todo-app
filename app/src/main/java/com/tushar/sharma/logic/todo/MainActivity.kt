@@ -53,9 +53,63 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation(viewModel)
+                    var unlocked by androidx.compose.runtime.remember {
+                        androidx.compose.runtime.mutableStateOf(settings.pinCode.isEmpty())
+                    }
+                    if (!unlocked) {
+                        LockScreen(
+                            onUnlock = { pin ->
+                                val ok = viewModel.verifyPin(pin)
+                                if (ok) unlocked = true
+                                ok
+                            },
+                            onForgotPin = {
+                                // clears pin so user can enter app; data remains
+                                viewModel.clearPin()
+                                unlocked = true
+                            }
+                        )
+                    } else {
+                        AppNavigation(viewModel)
+                    }
                 }
             }
+        }
+    }
+
+    private fun requestStoragePermission() {
+        // Android 11+ : MANAGE_EXTERNAL_STORAGE via special settings screen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:$packageName")
+                    )
+                    allFilesLauncher.launch(intent)
+                } catch (_: Exception) {
+                    try {
+                        allFilesLauncher.launch(
+                            android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                            )
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+        } else {
+            // Android 10 and below: classic runtime permissions
+            val needed = mutableListOf<String>()
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.READ_EXTERNAL_STORAGE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) needed += Manifest.permission.READ_EXTERNAL_STORAGE
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.WRITE_EXTERNAL_STORAGE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) needed += Manifest.permission.WRITE_EXTERNAL_STORAGE
+            if (needed.isNotEmpty()) storagePermLauncher.launch(needed.toTypedArray())
         }
     }
 }

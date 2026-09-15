@@ -32,7 +32,19 @@ data class Category(
             "#3F51B5", "#795548", "#607D8B", "#FF5722"
         )
 
-        fun all(custom: List<Category>): List<Category> = PRESETS + custom
+        /** All visible categories: presets (minus hidden) + custom, in custom order if set. */
+        fun all(
+            custom: List<Category>,
+            order: List<String> = emptyList(),
+            hidden: List<String> = emptyList()
+        ): List<Category> {
+            val visible = (PRESETS + custom).filterNot { it.id in hidden }
+            if (order.isEmpty()) return visible
+            val byId = visible.associateBy { it.id }
+            val ordered = order.mapNotNull { byId[it] }
+            val leftovers = visible.filterNot { it.id in order }
+            return ordered + leftovers
+        }
 
         fun byId(id: String, custom: List<Category> = emptyList()): Category =
             (PRESETS + custom).firstOrNull { it.id == id } ?: DEFAULT
