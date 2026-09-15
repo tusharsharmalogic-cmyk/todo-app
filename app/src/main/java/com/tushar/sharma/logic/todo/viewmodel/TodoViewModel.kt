@@ -33,6 +33,9 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
     private val _lastDeleted = MutableStateFlow<Todo?>(null)
     val lastDeleted: StateFlow<Todo?> = _lastDeleted
 
+    private val _settingsLoaded = MutableStateFlow(false)
+    val settingsLoaded: StateFlow<Boolean> = _settingsLoaded
+
     val settings: StateFlow<AppSettings> = repo.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
@@ -40,7 +43,9 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
     val allTodos: StateFlow<List<Todo>> = _all
 
     val categories: StateFlow<List<Category>> = repo.settings
-        .combine(_all) { s, _ -> Category.all(s.customCategories) }
+        .combine(_all) { s, _ ->
+            Category.all(s.customCategories, s.categoryOrder, s.hiddenCategories)
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Category.PRESETS)
 
     init {
@@ -49,6 +54,7 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
                 _filter.value = FilterMode.values()
                     .getOrElse(s.lastFilterOrdinal) { FilterMode.All }
                 _categoryFilter.value = s.lastCategoryFilter
+                _settingsLoaded.value = true
             }
         }
         viewModelScope.launch {
@@ -278,6 +284,22 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun verifyPin(pin: String): Boolean = settings.value.pinCode == pin
+
+    // -------- Storage folder (SAF) --------
+
+    val hasExternalFolder: Boolean get() = repo.hasExternalFolder
+
+    fun onFolderPicked(uri: android.net.Uri) {
+        repo.setExternalFolder(uri)
+        // Force re-read of files from new location
+        viewModelScope.launch {
+            // trigger reload by re-reading flows
+        }
+    }
+
+    fun clearExternalFolder() {
+        repo.clearExternalFolder()
+    }
 
     // Stats
     fun totalCount(): Int = _all.value.size

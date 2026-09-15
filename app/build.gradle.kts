@@ -12,8 +12,8 @@ android {
         applicationId = "com.tushar.sharma.logic.todo"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "2.3"
+        versionCode = 6
+        versionName = "2.4"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -86,6 +86,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.6.0")
 
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

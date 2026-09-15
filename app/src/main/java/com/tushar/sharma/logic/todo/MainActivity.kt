@@ -1,28 +1,27 @@
 package com.tushar.sharma.logic.todo
 
 import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,11 +42,12 @@ class MainActivity : ComponentActivity() {
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    private val storagePermLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
-
-    private val allFilesLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    private val folderPickerLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                viewModel.onFolderPicked(uri)
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,10 +57,10 @@ class MainActivity : ComponentActivity() {
             notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        requestStoragePermission()
-
         setContent {
             val settings by viewModel.settings.collectAsState()
+            val settingsLoaded by viewModel.settingsLoaded.collectAsState()
+
             ModernTodoTheme(
                 themeMode = settings.themeMode,
                 accentHex = settings.accentHex,
@@ -71,15 +71,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    var unlocked by remember {
-                        mutableStateOf(settings.pinCode.isEmpty())
-                    }
-                    // Re-lock check when PIN changes
-                    val pinEmpty = settings.pinCode.isEmpty()
-                    if (pinEmpty && !unlocked) unlocked = true
+                    var unlocked by remember { mutableStateOf<Boolean?>(null) }
 
-                    if (!unlocked) {
-                        LockScreen(
+                    LaunchedEffect(settingsLoaded, settings.pinCode) {
+                        if (settingsLoaded && unlocked == null) {
+                            unlocked = settings.pinCode.isEmpty()
+                        }
+                    }
+
+                    when (unlocked) {
+                        null -> Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator() }
+                        false -> LockScreen(
                             onUnlock = { pin ->
                                 val ok = viewModel.verifyPin(pin)
                                 if (ok) unlocked = true
@@ -90,49 +95,22 @@ class MainActivity : ComponentActivity() {
                                 unlocked = true
                             }
                         )
-                    } else {
-                        AppNavigation(viewModel)
+                        else -> AppNavigation(
+                            viewModel = viewModel,
+                            onPickFolder = { folderPickerLauncher.launch(null) }
+                        )
                     }
                 }
             }
         }
     }
-
-    private fun requestStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                try {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
-                    allFilesLauncher.launch(intent)
-                } catch (_: Exception) {
-                    try {
-                        allFilesLauncher.launch(
-                            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                        )
-                    } catch (_: Exception) {}
-                }
-            }
-        } else {
-            val needed = mutableListOf<String>()
-            if (ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.READ_EXTERNAL_STORAGE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) needed += Manifest.permission.READ_EXTERNAL_STORAGE
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
-                ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.WRITE_EXTERNAL_STORAGE
-                ) != PackageManager.PERMISSION_GRANTED
-            ) needed += Manifest.permission.WRITE_EXTERNAL_STORAGE
-            if (needed.isNotEmpty()) storagePermLauncher.launch(needed.toTypedArray())
-        }
-    }
 }
 
 @Composable
-fun AppNavigation(viewModel: TodoViewModel) {
+fun AppNavigation(
+    viewModel: TodoViewModel,
+    onPickFolder: () -> Unit
+) {
     val navController = rememberNavController()
 
     NavHost(
@@ -168,7 +146,11 @@ fun AppNavigation(viewModel: TodoViewModel) {
             StatsScreen(viewModel, onBack = { navController.popBackStack() })
         }
         composable("settings") {
-            SettingsScreen(viewModel, onBack = { navController.popBackStack() })
+            SettingsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onPickFolder = onPickFolder
+            )
         }
     }
 }

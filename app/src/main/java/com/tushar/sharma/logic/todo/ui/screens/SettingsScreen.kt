@@ -68,7 +68,11 @@ private val ACCENTS = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
+fun SettingsScreen(
+    viewModel: TodoViewModel,
+    onBack: () -> Unit,
+    onPickFolder: () -> Unit = {}
+) {
     val settings by viewModel.settings.collectAsState()
     val categories by viewModel.categories.collectAsState()
     var showAddCategory by remember { mutableStateOf(false) }
@@ -343,6 +347,54 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
                             }
                         )
                     }
+                }
+            }
+
+            // ---- Storage backup ----
+            SectionTitle("Data Backup")
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "Save tasks to a folder on your phone so they survive an app uninstall.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    val hasFolder = viewModel.hasExternalFolder
+                    Text(
+                        if (hasFolder) "✅ Backup folder set"
+                        else "⚠️ Backup folder not set",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = onPickFolder,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (hasFolder) "Change folder" else "Pick folder")
+                        }
+                        if (hasFolder) {
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = { viewModel.clearExternalFolder() },
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text("Remove") }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Tip: choose the 'Todo-app' folder in /sdcard/ (create it if needed).",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

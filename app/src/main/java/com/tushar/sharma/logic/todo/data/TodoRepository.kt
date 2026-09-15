@@ -1,144 +1,123 @@
 package com.tushar.sharma.logic.todo.data
 
 import android.content.Context
-import android.os.Environment
+import android.net.Uri
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.io.File
 
 private val Context.dataStore by preferencesDataStore(name = "todo_prefs")
 
 class TodoRepository(private val context: Context) {
 
     companion object {
-        const val EXTERNAL_DIR_NAME = "Todo-app"
-        const val TODOS_FILE = "todos.json"
-        const val SETTINGS_FILE = "settings.json"
+        const val PREFS = "todo_storage_prefs"
+        const val KEY_TREE_URI = "tree_uri"
+        const val KEY_SAVED_TODOS = "saved_todos_json"
+        const val KEY_SAVED_SETTINGS = "saved_settings_json"
     }
 
     private val TODOS_KEY = stringPreferencesKey("todos_json")
     private val SETTINGS_KEY = stringPreferencesKey("settings_json")
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
-    /** Path: /sdcard/Todo-app/ (or app-private if permission denied) */
-    private val externalDir: File?
-        get() {
-            return try {
-                val root = Environment.getExternalStorageDirectory()
-                val dir = File(root, EXTERNAL_DIR_NAME)
-                if (!dir.exists()) dir.mkdirs()
-                if (dir.canWrite()) dir else null
-            } catch (_: Exception) {
-                null
-            }
-        }
+    /** Whether the user has granted a folder for external backup. */
+    val hasExternalFolder: Boolean
+        get() = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_TREE_URI, null) != null
 
-    /** True when /sdcard/Todo-app/ is writable. */
-    val usingExternalStorage: Boolean get() = externalDir != null
-
-    // -------- In-memory mirrors (updated on every save) --------
-
-    private val _todosCache = MutableStateFlow<List<Todo>>(emptyList())
-    private val _settingsCache = MutableStateFlow(AppSettings())
-
-    init {
-        // Load from external file (if present) synchronously at start
-        externalDir?.let { dir ->
-            val tf = File(dir, TODOS_FILE)
-            val sf = File(dir, SETTINGS_FILE)
-            if (tf.exists()) {
-                try {
-                    _todosCache.value = json.decodeFromString<List<Todo>>(tf.readText())
-                } catch (_: Exception) {}
-            }
-            if (sf.exists()) {
-                try {
-                    _settingsCache.value = json.decodeFromString<AppSettings>(sf.readText())
-                } catch (_: Exception) {}
-            }
-        }
+    /** Persist the picked folder's SAF tree URI. */
+    fun setExternalFolder(uri: Uri) {
+        val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        try {
+            context.contentResolver.takePersistableUriPermission(uri, flags)
+        } catch (_: Exception) {}
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_TREE_URI, uri.toString()).apply()
     }
 
-    val todos: Flow<List<Todo>> = context.dataStore.data.map { prefs ->
-        // Prefer external file if it exists
-        val ext = externalDir
-        if (ext != null) {
-            val tf = File(ext, TODOS_FILE)
-            if (tf.exists()) {
-                try {
-                    val list = json.decodeFromString<List<Todo>>(tf.readText())
-                    _todosCache.value = list
-                    return@map list
-                } catch (_: Exception) {}
+    fun clearExternalFolder() {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().remove(KEY_TREE_URI).apply()
+    }
+
+    private fun getRootDoc(): DocumentFile? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val uriStr = prefs.getString(KEY_TREE_URI, null) ?: return null
+        return try {
+            DocumentFile.fromTreeUri(context, Uri.parse(uriStr))
+        } catch (_: Exception) { null }
+    }
+
+    private fun findOrCreateFile(parent: DocumentFile, name: String): DocumentFile? {
+        val existing = parent.findFile(name)
+        if (existing != null) return existing
+        return parent.createFile("application/json", name)
+    }
+
+    private fun readFileText(name: String): String? {
+        val root = getRootDoc() ?: return null
+        val file = root.findFile(name) ?: return null
+        return try {
+            context.contentResolver.openInputStream(file.uri)?.use {
+                it.bufferedReader().readText()
             }
-        }
-        // Fallback to DataStore
-        val raw = prefs[TODOS_KEY] ?: "[]"
-        val list = try {
+        } catch (_: Exception) { null }
+    }
+
+    private fun writeFileText(name: String, text: String): Boolean {
+        val root = getRootDoc() ?: return false
+        val file = findOrCreateFile(root, name) ?: return false
+        return try {
+            context.contentResolver.openOutputStream(file.uri, "wt")?.use {
+                it.bufferedWriter().write(text)
+            }
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // -------- flows --------
+
+    val todos: Flow<List<Todo>> = context.dataStore.data.map { prefs ->
+        // Try external first (if configured)
+        val extRaw = readFileText("todos.json")
+        val raw = extRaw ?: prefs[TODOS_KEY] ?: "[]"
+        try {
             json.decodeFromString<List<Todo>>(raw)
         } catch (_: Exception) { emptyList() }
-        _todosCache.value = list
-        list
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
-        val ext = externalDir
-        if (ext != null) {
-            val sf = File(ext, SETTINGS_FILE)
-            if (sf.exists()) {
-                try {
-                    val s = json.decodeFromString<AppSettings>(sf.readText())
-                    _settingsCache.value = s
-                    return@map s
-                } catch (_: Exception) {}
-            }
-        }
-        val raw = prefs[SETTINGS_KEY] ?: "{}"
-        val s = try {
+        val extRaw = readFileText("settings.json")
+        val raw = extRaw ?: prefs[SETTINGS_KEY] ?: "{}"
+        try {
             json.decodeFromString<AppSettings>(raw)
         } catch (_: Exception) { AppSettings() }
-        _settingsCache.value = s
-        s
     }
 
     suspend fun save(list: List<Todo>) {
-        _todosCache.value = list
         val payload = json.encodeToString(list)
-        // external
+        // Always mirror to DataStore (reliable)
+        context.dataStore.edit { prefs -> prefs[TODOS_KEY] = payload }
+        // Also write to external folder if configured
         withContext(Dispatchers.IO) {
-            externalDir?.let { dir ->
-                try {
-                    File(dir, TODOS_FILE).writeText(payload)
-                } catch (_: Exception) {}
-            }
-        }
-        // always mirror to DataStore too (so app restores even if SD deleted)
-        context.dataStore.edit { prefs ->
-            prefs[TODOS_KEY] = payload
+            if (hasExternalFolder) writeFileText("todos.json", payload)
         }
     }
 
     suspend fun saveSettings(s: AppSettings) {
-        _settingsCache.value = s
         val payload = json.encodeToString(s)
+        context.dataStore.edit { prefs -> prefs[SETTINGS_KEY] = payload }
         withContext(Dispatchers.IO) {
-            externalDir?.let { dir ->
-                try {
-                    File(dir, SETTINGS_FILE).writeText(payload)
-                } catch (_: Exception) {}
-            }
-        }
-        context.dataStore.edit { prefs ->
-            prefs[SETTINGS_KEY] = payload
+            if (hasExternalFolder) writeFileText("settings.json", payload)
         }
     }
 }
