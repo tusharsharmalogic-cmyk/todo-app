@@ -74,14 +74,14 @@ fun TodoItem(
     val cat = Category.byId(todo.categoryId, categories)
     val catColor = parseHexColor(cat.colorHex)
 
-    // Completed task: soft green background + green border
+    // Completed task: faded/greyed-out look that adapts to light & dark theme
     val cardBgColor = if (todo.isDone)
-        Color(0xFFE8F5E9) // soft green
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     else
         MaterialTheme.colorScheme.surface
 
     val borderColor = if (todo.isDone)
-        Color(0xFF66BB6A) // green border
+        MaterialTheme.colorScheme.outlineVariant
     else
         Color.Transparent
 
@@ -159,8 +159,7 @@ fun TodoItem(
                         imageVector = if (todo.isDone) Icons.Rounded.CheckCircle
                         else Icons.Rounded.RadioButtonUnchecked,
                         contentDescription = "Toggle",
-                        tint = if (todo.isDone) Color(0xFF43A047)
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                         modifier = Modifier.size(24.dp)
                     )
                 }

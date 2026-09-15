@@ -27,5 +27,16 @@
         <receiver
             android:name=".notifications.ReminderReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".notifications.BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

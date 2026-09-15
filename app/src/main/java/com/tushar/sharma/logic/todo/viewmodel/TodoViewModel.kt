@@ -7,6 +7,7 @@ import com.tushar.sharma.logic.todo.data.AppSettings
 import com.tushar.sharma.logic.todo.data.Category
 import com.tushar.sharma.logic.todo.data.Todo
 import com.tushar.sharma.logic.todo.data.TodoRepository
+import com.tushar.sharma.logic.todo.notifications.ReminderScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -70,10 +71,9 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
                 it.title.contains(q, ignoreCase = true) ||
                     it.description.contains(q, ignoreCase = true)
             }
-            // Default sort: High(2) -> Medium(1) -> Low(0), completed tasks neeche
+            // Sort: active first (user order), completed neeche
             result.sortedWith(
                 compareBy<Todo> { if (it.isDone) 1 else 0 }
-                    .thenByDescending { it.priority }
                     .thenBy { it.orderIndex }
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -145,7 +145,19 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleDone(id: Long) {
         viewModelScope.launch {
-            repo.save(_all.value.map { if (it.id == id) it.copy(isDone = !it.isDone) else it })
+            val item = _all.value.find { it.id == id } ?: return@launch
+            val nowDone = !item.isDone
+            if (nowDone) {
+                // Completed → cancel any pending reminder
+                ReminderScheduler.cancel(getApplication(), id)
+            } else if (item.dueDate != null && item.reminderMinutes != null) {
+                // Un-done → re-schedule if reminder is still in future
+                val trigger = item.dueDate - item.reminderMinutes * 60_000L
+                ReminderScheduler.schedule(
+                    getApplication(), id, item.title, item.description, trigger
+                )
+            }
+            repo.save(_all.value.map { if (it.id == id) it.copy(isDone = nowDone) else it })
         }
     }
 
@@ -153,6 +165,7 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val item = _all.value.find { it.id == id }
             _lastDeleted.value = item
+            ReminderScheduler.cancel(getApplication(), id)
             repo.save(_all.value.filterNot { it.id == id })
         }
     }
@@ -173,20 +186,19 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Sirf in-memory swap — disk save nahi, no IO on every drag event
-    fun moveTodo(from: Int, to: Int) {
-        val list = _all.value.toMutableList()
-        if (from !in list.indices || to !in list.indices || from == to) return
-        val item = list.removeAt(from)
-        list.add(to, item)
-        // orderIndex update karo but disk pe mat likho
-        _all.value = list.mapIndexed { idx, t -> t.copy(orderIndex = idx) }
-    }
-
-    // Drag end hone par call karo — tabhi disk pe save hoga
-    fun saveOrder() {
-        val snapshot = _all.value
-        viewModelScope.launch { repo.save(snapshot) }
+    // Swap positions between two todos (by id) — clean reorder logic
+    fun swapOrder(idA: Long, idB: Long) {
+        val sorted = _all.value.sortedBy { it.orderIndex }.toMutableList()
+        val aIdx = sorted.indexOfFirst { it.id == idA }
+        val bIdx = sorted.indexOfFirst { it.id == idB }
+        if (aIdx < 0 || bIdx < 0 || aIdx == bIdx) return
+        val tmp = sorted[aIdx]
+        sorted[aIdx] = sorted[bIdx]
+        sorted[bIdx] = tmp
+        // Renumber sequentially for clean state
+        val renumbered = sorted.mapIndexed { i, t -> t.copy(orderIndex = i) }
+        _all.value = renumbered
+        viewModelScope.launch { repo.save(renumbered) }
     }
 
     fun updateSettings(s: AppSettings) {

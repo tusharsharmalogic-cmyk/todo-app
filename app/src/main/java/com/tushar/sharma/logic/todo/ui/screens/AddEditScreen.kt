@@ -108,7 +108,7 @@ fun AddEditScreen(
         val trigger = if (dueDate != null && reminderMinutes != null) {
             dueDate!! - reminderMinutes!! * 60_000L
         } else null
-        if (trigger != null && trigger > System.currentTimeMillis()) {
+        if (trigger != null) {
             ReminderScheduler.schedule(context, taskId, taskTitle, taskDesc, trigger)
         } else {
             ReminderScheduler.cancel(context, taskId)

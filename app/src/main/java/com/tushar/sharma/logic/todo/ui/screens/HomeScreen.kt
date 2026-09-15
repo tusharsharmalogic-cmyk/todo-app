@@ -249,10 +249,7 @@ fun HomeScreen(
                     onEditClick = onEditClick,
                     onToggle = viewModel::toggleDone,
                     onDelete = viewModel::deleteTodo,
-                    onMove = { from, to ->
-                        viewModel.moveTodo(from, to)
-                        viewModel.saveOrder()
-                    },
+                    onMove = { fromId, toId -> viewModel.swapOrder(fromId, toId) },
                     onClearCompleted = viewModel::clearCompleted
                 )
             }
@@ -268,7 +265,7 @@ fun TodoList(
     onEditClick: (Long) -> Unit,
     onToggle: (Long) -> Unit,
     onDelete: (Long) -> Unit,
-    onMove: (Int, Int) -> Unit,
+    onMove: (Long, Long) -> Unit,
     onClearCompleted: () -> Unit
 ) {
     LazyColumn(
@@ -276,7 +273,7 @@ fun TodoList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        itemsIndexed(todos, key = { _, t -> t.id }) { index, todo ->
+        itemsIndexed(todos) { index, todo ->
             TodoItem(
                 todo = todo,
                 categories = categories,
@@ -285,11 +282,11 @@ fun TodoList(
                 onDelete = { onDelete(todo.id) },
                 // Up button: sirf tab dikhao jab upar koi active task ho
                 onMoveUp = if (!todo.isDone && index > 0 && !todos[index - 1].isDone) {
-                    { onMove(index, index - 1) }
+                    { onMove(todo.id, todos[index - 1].id) }
                 } else null,
                 // Down button: sirf tab dikhao jab neeche koi active task ho
                 onMoveDown = if (!todo.isDone && index < todos.size - 1 && !todos[index + 1].isDone) {
-                    { onMove(index, index + 1) }
+                    { onMove(todo.id, todos[index + 1].id) }
                 } else null
             )
         }
