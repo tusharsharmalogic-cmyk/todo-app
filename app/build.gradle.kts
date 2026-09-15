@@ -12,8 +12,8 @@ android {
         applicationId = "com.tushar.sharma.logic.todo"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 3
+        versionName = "2.1"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -31,12 +31,12 @@ android {
 
     signingConfigs {
         create("release") {
-            // Uses the debug keystore so the release APK is installable.
-            // Replace with a real keystore before publishing on Play Store.
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            // Fixed keystore committed with the repo → all future releases share the same
+            // signature, so users can update over previous installs without uninstalling.
+            storeFile = rootProject.file(".keystore/todo-release.jks")
+            storePassword = "Todo@2026"
+            keyAlias = "todo-key"
+            keyPassword = "Todo@2026"
         }
     }
 
