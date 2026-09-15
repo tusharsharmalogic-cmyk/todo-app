@@ -89,10 +89,6 @@ class MainActivity : ComponentActivity() {
                                 val ok = viewModel.verifyPin(pin)
                                 if (ok) unlocked = true
                                 ok
-                            },
-                            onForgotPin = {
-                                viewModel.clearPin()
-                                unlocked = true
                             }
                         )
                         else -> AppNavigation(

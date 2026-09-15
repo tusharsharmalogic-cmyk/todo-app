@@ -41,8 +41,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun LockScreen(
-    onUnlock: (String) -> Boolean,
-    onForgotPin: () -> Unit
+    onUnlock: (String) -> Boolean
 ) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
@@ -153,14 +152,6 @@ fun LockScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            androidx.compose.material3.TextButton(onClick = onForgotPin) {
-                Text(
-                    "Forgot PIN? (reset app data)",
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            }
         }
     }
 }

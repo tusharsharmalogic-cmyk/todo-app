@@ -291,9 +291,11 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onFolderPicked(uri: android.net.Uri) {
         repo.setExternalFolder(uri)
-        // Force re-read of files from new location
         viewModelScope.launch {
-            // trigger reload by re-reading flows
+            // If the folder already contains backups, import them into DataStore.
+            val imported = repo.importFromExternal()
+            // Otherwise push current data out as initial mirror.
+            if (!imported) repo.exportToExternal()
         }
     }
 
