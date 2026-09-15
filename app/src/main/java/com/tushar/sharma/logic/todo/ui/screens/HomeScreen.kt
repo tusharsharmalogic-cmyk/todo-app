@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -260,8 +262,13 @@ fun HomeScreen(
                     todos = todos,
                     categories = categories,
                     filter = filter,
+                    listState = listState,
                     onEditClick = onEditClick,
-                    onToggle = viewModel::toggleDone,
+                    onToggle = { id ->
+                        pendingScroll = listState.firstVisibleItemIndex to
+                            listState.firstVisibleItemScrollOffset
+                        viewModel.toggleDone(id)
+                    },
                     onDelete = viewModel::deleteTodo,
                     onMove = { fromId, toId -> viewModel.swapOrder(fromId, toId) },
                     onClearCompleted = viewModel::clearCompleted

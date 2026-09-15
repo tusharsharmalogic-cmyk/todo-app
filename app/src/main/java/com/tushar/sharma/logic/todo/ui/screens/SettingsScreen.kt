@@ -22,6 +22,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -457,6 +461,7 @@ fun SettingsScreen(viewModel: TodoViewModel, onBack: () -> Unit) {
                     viewModel.clearPin()
                     showPinRemove = false
                     pinError = null
+                    true
                 } else {
                     pinError = "Wrong PIN"
                     false

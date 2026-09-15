@@ -11,5 +11,8 @@ data class AppSettings(
     val defaultReminderMinutes: Int? = 0,   // 0=At time
     val lastFilterOrdinal: Int = 0,
     val lastCategoryFilter: String? = null,
-    val customCategories: List<Category> = emptyList()
+    val customCategories: List<Category> = emptyList(),
+    val categoryOrder: List<String> = emptyList(),
+    val hiddenCategories: List<String> = emptyList(),
+    val pinCode: String = ""
 )
