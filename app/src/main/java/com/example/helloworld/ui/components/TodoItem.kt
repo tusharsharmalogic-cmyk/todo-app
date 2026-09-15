@@ -3,6 +3,7 @@ package com.example.helloworld.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,11 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -34,8 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,18 +62,10 @@ fun TodoItem(
     onClick: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val alpha by animateFloatAsState(if (todo.isDone) 0.55f else 1f, label = "alpha")
-
-    // Fix: completed task pe green/surface color, red nahi
-    val cardColor by animateColorAsState(
-        targetValue = if (todo.isDone)
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        else MaterialTheme.colorScheme.surface,
-        label = "cardColor"
-    )
-
     val priorityColor = when (todo.priority) {
         2 -> PriorityHigh
         0 -> PriorityLow
@@ -78,14 +74,22 @@ fun TodoItem(
     val cat = Category.byId(todo.categoryId, categories)
     val catColor = parseHexColor(cat.colorHex)
 
-    // Fix: SwipeToDismissBox sirf delete ke liye, confirmValueChange mein false return karo
-    // taaki item apni jagah rahe aur delete callback chale
+    // Completed task: soft green background + green border
+    val cardBgColor = if (todo.isDone)
+        Color(0xFFE8F5E9) // soft green
+    else
+        MaterialTheme.colorScheme.surface
+
+    val borderColor = if (todo.isDone)
+        Color(0xFF66BB6A) // green border
+    else
+        Color.Transparent
+
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
                 onDelete()
             }
-            // Always return false - item wapas aata hai, delete ViewModel se hota hai
             false
         }
     )
@@ -94,13 +98,9 @@ fun TodoItem(
         state = dismissState,
         enableDismissFromStartToEnd = false,
         backgroundContent = {
-            // currentValue ya targetValue se check karo swipe direction
             val isSwiping = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
-            val bgColor = if (isSwiping) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.background
-            }
+            val bgColor = if (isSwiping) MaterialTheme.colorScheme.errorContainer
+            else Color.Transparent
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -123,50 +123,61 @@ fun TodoItem(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .alpha(alpha),
+                .border(
+                    width = if (todo.isDone) 1.5.dp else 0.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(20.dp)
+                ),
             onClick = onClick,
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            colors = CardDefaults.cardColors(containerColor = cardBgColor),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (todo.isDone) 0.dp else 2.dp
+            )
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // Fix: end padding 6dp se 14dp - delete button hata diya, balanced padding
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                    .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Priority dot
                 Box(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
                         .background(priorityColor)
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
 
-                // Toggle/check button
-                androidx.compose.material3.IconButton(
+                // Toggle button
+                IconButton(
                     onClick = onToggle,
-                    modifier = Modifier.size(30.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = if (todo.isDone) Icons.Rounded.CheckCircle
                         else Icons.Rounded.RadioButtonUnchecked,
                         contentDescription = "Toggle",
-                        tint = if (todo.isDone) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (todo.isDone) Color(0xFF43A047)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
                 Spacer(Modifier.width(8.dp))
 
+                // Content
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = todo.title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = if (todo.isDone) FontWeight.Normal else FontWeight.SemiBold,
                         textDecoration = if (todo.isDone) TextDecoration.LineThrough
                         else TextDecoration.None,
+                        color = if (todo.isDone)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -175,24 +186,26 @@ fun TodoItem(
                         Text(
                             text = todo.description,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = if (todo.isDone) 0.5f else 1f
+                            ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(5.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = catColor.copy(alpha = 0.18f)
+                            color = catColor.copy(alpha = if (todo.isDone) 0.10f else 0.18f)
                         ) {
                             Text(
                                 text = cat.name,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = catColor,
+                                color = catColor.copy(alpha = if (todo.isDone) 0.6f else 1f),
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -213,8 +226,42 @@ fun TodoItem(
                     }
                 }
 
-                // Fix: Delete IconButton HATA DIYA - sirf swipe se delete hoga
-                // Double delete button issue solve ho gaya
+                // Up/Down reorder buttons — sirf active tasks pe dikhenge
+                if (!todo.isDone && (onMoveUp != null || onMoveDown != null)) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        IconButton(
+                            onClick = { onMoveUp?.invoke() },
+                            modifier = Modifier.size(28.dp),
+                            enabled = onMoveUp != null
+                        ) {
+                            Icon(
+                                Icons.Rounded.KeyboardArrowUp,
+                                contentDescription = "Move Up",
+                                tint = if (onMoveUp != null)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { onMoveDown?.invoke() },
+                            modifier = Modifier.size(28.dp),
+                            enabled = onMoveDown != null
+                        ) {
+                            Icon(
+                                Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = "Move Down",
+                                tint = if (onMoveDown != null)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

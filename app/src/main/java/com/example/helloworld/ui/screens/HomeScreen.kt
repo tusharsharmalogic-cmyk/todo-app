@@ -1,12 +1,7 @@
 package com.example.helloworld.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -50,8 +44,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,13 +53,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.example.helloworld.data.Category
 import com.example.helloworld.ui.components.TodoItem
 import com.example.helloworld.ui.theme.GradientEnd
@@ -93,7 +81,6 @@ fun HomeScreen(
     val categories by viewModel.categories.collectAsState()
 
     var searchOpen by remember { mutableStateOf(false) }
-
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(lastDeleted) {
@@ -255,15 +242,17 @@ fun HomeScreen(
                     }
                 )
             } else {
-                ReorderableTodoList(
+                TodoList(
                     todos = todos,
                     categories = categories,
                     filter = filter,
                     onEditClick = onEditClick,
                     onToggle = viewModel::toggleDone,
                     onDelete = viewModel::deleteTodo,
-                    onMove = viewModel::moveTodo,
-                    onSaveOrder = viewModel::saveOrder,
+                    onMove = { from, to ->
+                        viewModel.moveTodo(from, to)
+                        viewModel.saveOrder()
+                    },
                     onClearCompleted = viewModel::clearCompleted
                 )
             }
@@ -272,7 +261,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun ReorderableTodoList(
+fun TodoList(
     todos: List<com.example.helloworld.data.Todo>,
     categories: List<Category>,
     filter: FilterMode,
@@ -280,103 +269,29 @@ fun ReorderableTodoList(
     onToggle: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onMove: (Int, Int) -> Unit,
-    onSaveOrder: () -> Unit,
     onClearCompleted: () -> Unit
 ) {
-    val listState = rememberLazyListState()
-
-    // Fix: mutableLongStateOf use karo Long ke liye (performance better)
-    var draggingId by remember { mutableLongStateOf(-1L) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    val density = LocalDensity.current
-    val spacingPx = with(density) { 10.dp.toPx() }
-
     LazyColumn(
-        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         itemsIndexed(todos, key = { _, t -> t.id }) { index, todo ->
-            val isDragging = draggingId == todo.id
-
-            // Fix: AnimatedVisibility HATA DIYA - yahi reorder jitter ka main reason tha
-            // Har reorder pe enter/exit animation trigger ho raha tha
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .graphicsLayer {
-                        translationY = if (isDragging) dragOffset else 0f
-                        // Fix: dragging item ko thoda scale up karo - better visual feedback
-                        scaleX = if (isDragging) 1.03f else 1f
-                        scaleY = if (isDragging) 1.03f else 1f
-                        shadowElevation = if (isDragging) 8f else 0f
-                    }
-                    .pointerInput(todo.id) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                draggingId = todo.id
-                                dragOffset = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragOffset += dragAmount.y
-
-                                val info = listState.layoutInfo
-                                val myInfo = info.visibleItemsInfo
-                                    .firstOrNull { it.key == todo.id }
-                                    ?: return@detectDragGesturesAfterLongPress
-
-                                val currentIdx = todos.indexOfFirst { it.id == todo.id }
-                                if (currentIdx < 0) return@detectDragGesturesAfterLongPress
-
-                                val goingDown = dragOffset > 0f
-                                val neighborIndex = currentIdx + if (goingDown) 1 else -1
-                                if (neighborIndex !in todos.indices)
-                                    return@detectDragGesturesAfterLongPress
-
-                                val neighborId = todos[neighborIndex].id
-                                val neighborInfo = info.visibleItemsInfo
-                                    .firstOrNull { it.key == neighborId }
-                                    ?: return@detectDragGesturesAfterLongPress
-
-                                val myCenter = myInfo.offset + myInfo.size / 2f + dragOffset
-                                val neighborCenter = neighborInfo.offset + neighborInfo.size / 2f
-
-                                // Fix: threshold add kiya - items tabhi swap honge jab
-                                // center clearly cross ho jaye (jitter reduce hoga)
-                                val threshold = neighborInfo.size * 0.3f
-
-                                if (goingDown && myCenter > neighborCenter + threshold) {
-                                    onMove(currentIdx, neighborIndex)
-                                    dragOffset -= (myInfo.size + spacingPx)
-                                } else if (!goingDown && myCenter < neighborCenter - threshold) {
-                                    onMove(currentIdx, neighborIndex)
-                                    dragOffset += (myInfo.size + spacingPx)
-                                }
-                            },
-                            onDragEnd = {
-                                draggingId = -1L
-                                dragOffset = 0f
-                                onSaveOrder()
-                            },
-                            onDragCancel = {
-                                draggingId = -1L
-                                dragOffset = 0f
-                                onSaveOrder()
-                            }
-                        )
-                    }
-            ) {
-                TodoItem(
-                    todo = todo,
-                    categories = categories,
-                    onClick = { onEditClick(todo.id) },
-                    onToggle = { onToggle(todo.id) },
-                    onDelete = { onDelete(todo.id) }
-                )
-            }
+            TodoItem(
+                todo = todo,
+                categories = categories,
+                onClick = { onEditClick(todo.id) },
+                onToggle = { onToggle(todo.id) },
+                onDelete = { onDelete(todo.id) },
+                // Up button: sirf tab dikhao jab upar koi active task ho
+                onMoveUp = if (!todo.isDone && index > 0 && !todos[index - 1].isDone) {
+                    { onMove(index, index - 1) }
+                } else null,
+                // Down button: sirf tab dikhao jab neeche koi active task ho
+                onMoveDown = if (!todo.isDone && index < todos.size - 1 && !todos[index + 1].isDone) {
+                    { onMove(index, index + 1) }
+                } else null
+            )
         }
 
         if (filter == FilterMode.Completed && todos.isNotEmpty()) {

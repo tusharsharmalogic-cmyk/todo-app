@@ -70,7 +70,12 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
                 it.title.contains(q, ignoreCase = true) ||
                     it.description.contains(q, ignoreCase = true)
             }
-            result
+            // Default sort: High(2) -> Medium(1) -> Low(0), completed tasks neeche
+            result.sortedWith(
+                compareBy<Todo> { if (it.isDone) 1 else 0 }
+                    .thenByDescending { it.priority }
+                    .thenBy { it.orderIndex }
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setFilter(mode: FilterMode) {
