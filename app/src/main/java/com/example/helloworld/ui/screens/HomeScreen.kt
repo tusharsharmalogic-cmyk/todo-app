@@ -263,6 +263,7 @@ fun HomeScreen(
                     onToggle = viewModel::toggleDone,
                     onDelete = viewModel::deleteTodo,
                     onMove = viewModel::moveTodo,
+                    onSaveOrder = viewModel::saveOrder,
                     onClearCompleted = viewModel::clearCompleted
                 )
             }
@@ -279,6 +280,7 @@ fun ReorderableTodoList(
     onToggle: (Long) -> Unit,
     onDelete: (Long) -> Unit,
     onMove: (Int, Int) -> Unit,
+    onSaveOrder: () -> Unit,
     onClearCompleted: () -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -357,10 +359,12 @@ fun ReorderableTodoList(
                             onDragEnd = {
                                 draggingId = -1L
                                 dragOffset = 0f
+                                onSaveOrder()
                             },
                             onDragCancel = {
                                 draggingId = -1L
                                 dragOffset = 0f
+                                onSaveOrder()
                             }
                         )
                     }

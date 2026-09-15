@@ -168,13 +168,20 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Sirf in-memory swap — disk save nahi, no IO on every drag event
     fun moveTodo(from: Int, to: Int) {
         val list = _all.value.toMutableList()
         if (from !in list.indices || to !in list.indices || from == to) return
         val item = list.removeAt(from)
         list.add(to, item)
-        val reindexed = list.mapIndexed { idx, t -> t.copy(orderIndex = idx) }
-        viewModelScope.launch { repo.save(reindexed) }
+        // orderIndex update karo but disk pe mat likho
+        _all.value = list.mapIndexed { idx, t -> t.copy(orderIndex = idx) }
+    }
+
+    // Drag end hone par call karo — tabhi disk pe save hoga
+    fun saveOrder() {
+        val snapshot = _all.value
+        viewModelScope.launch { repo.save(snapshot) }
     }
 
     fun updateSettings(s: AppSettings) {
