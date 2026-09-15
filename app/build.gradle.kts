@@ -29,10 +29,22 @@ android {
         jvmTarget = "17"
     }
 
+    signingConfigs {
+        create("release") {
+            // Uses the debug keystore so the release APK is installable.
+            // Replace with a real keystore before publishing on Play Store.
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
