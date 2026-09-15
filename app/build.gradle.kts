@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.helloworld"
+    namespace = "com.tushar.sharma.logic.todo"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.helloworld"
+        applicationId = "com.tushar.sharma.logic.todo"
         minSdk = 24
         targetSdk = 34
         versionCode = 2

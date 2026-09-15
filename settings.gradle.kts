@@ -14,5 +14,5 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Modern Todo"
+rootProject.name = "Todo"
 include(":app")
