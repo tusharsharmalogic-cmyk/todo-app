@@ -287,10 +287,8 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
 
     // -------- Manual backup: export / import --------
 
-    /** Builds the backup JSON off the main thread and hands it to [onReady] to be written to a user-picked file. */
-    fun exportData(onReady: (String) -> Unit) {
-        viewModelScope.launch { onReady(repo.exportBackupJson()) }
-    }
+    /** Builds and returns the backup JSON string off the main thread. */
+    suspend fun exportData(): String = repo.exportBackupJson()
 
     /** Parses [text] (read from a user-picked file) and restores it, then calls [onResult] with success/failure. */
     fun importData(text: String, onResult: (Boolean) -> Unit) {

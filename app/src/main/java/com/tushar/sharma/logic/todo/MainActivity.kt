@@ -4,10 +4,15 @@ import android.Manifest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,14 +50,19 @@ class MainActivity : ComponentActivity() {
     private val exportLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri != null) {
-                viewModel.exportData { jsonText ->
+                lifecycleScope.launch(Dispatchers.IO) {
                     try {
-                        contentResolver.openOutputStream(uri, "wt")?.use {
-                            it.bufferedWriter().write(jsonText)
+                        val jsonText = viewModel.exportData()
+                        contentResolver.openOutputStream(uri, "wt")
+                            ?.bufferedWriter()
+                            ?.use { it.write(jsonText) }
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "Backup saved", Toast.LENGTH_SHORT).show()
                         }
-                        android.widget.Toast.makeText(this, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
                     } catch (_: Exception) {
-                        android.widget.Toast.makeText(this, "Export failed", android.widget.Toast.LENGTH_SHORT).show()
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(this@MainActivity, "Export failed", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }
@@ -68,11 +78,11 @@ class MainActivity : ComponentActivity() {
                     if (text != null) {
                         viewModel.importData(text) { success ->
                             val msg = if (success) "Data restored" else "Invalid backup file"
-                            android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                         }
                     }
                 } catch (_: Exception) {
-                    android.widget.Toast.makeText(this, "Import failed", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Import failed", Toast.LENGTH_SHORT).show()
                 }
             }
         }
