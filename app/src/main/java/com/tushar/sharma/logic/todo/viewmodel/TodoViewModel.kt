@@ -285,12 +285,16 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
 
     fun verifyPin(pin: String): Boolean = settings.value.pinCode == pin
 
-    // -------- Device storage sync --------
+    // -------- Manual backup: export / import --------
 
-    val isDeviceStorageEnabled: Boolean get() = repo.isDeviceStorageEnabled
+    /** Builds the backup JSON off the main thread and hands it to [onReady] to be written to a user-picked file. */
+    fun exportData(onReady: (String) -> Unit) {
+        viewModelScope.launch { onReady(repo.exportBackupJson()) }
+    }
 
-    fun setDeviceStorageEnabled(enabled: Boolean) {
-        viewModelScope.launch { repo.setDeviceStorageEnabled(enabled) }
+    /** Parses [text] (read from a user-picked file) and restores it, then calls [onResult] with success/failure. */
+    fun importData(text: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch { onResult(repo.importBackupJson(text)) }
     }
 
     // Stats

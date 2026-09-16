@@ -42,23 +42,40 @@ class MainActivity : ComponentActivity() {
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    private val storagePermLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) viewModel.setDeviceStorageEnabled(true)
+    private val exportLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri != null) {
+                viewModel.exportData { jsonText ->
+                    try {
+                        contentResolver.openOutputStream(uri, "wt")?.use {
+                            it.bufferedWriter().write(jsonText)
+                        }
+                        android.widget.Toast.makeText(this, "Backup saved", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (_: Exception) {
+                        android.widget.Toast.makeText(this, "Export failed", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
 
-    private fun handleDeviceStorageToggle(enable: Boolean) {
-        val needsPermission = enable &&
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                this, Manifest.permission.WRITE_EXTERNAL_STORAGE
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (needsPermission) {
-            storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        } else {
-            viewModel.setDeviceStorageEnabled(enable)
+    private val importLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                try {
+                    val text = contentResolver.openInputStream(uri)?.use {
+                        it.bufferedReader().readText()
+                    }
+                    if (text != null) {
+                        viewModel.importData(text) { success ->
+                            val msg = if (success) "Data restored" else "Invalid backup file"
+                            android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(this, "Import failed", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,7 +121,8 @@ class MainActivity : ComponentActivity() {
                         )
                         else -> AppNavigation(
                             viewModel = viewModel,
-                            onToggleDeviceStorage = ::handleDeviceStorageToggle
+                            onExport = { exportLauncher.launch("todo_backup.json") },
+                            onImport = { importLauncher.launch(arrayOf("application/json", "*/*")) }
                         )
                     }
                 }
@@ -116,7 +134,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation(
     viewModel: TodoViewModel,
-    onToggleDeviceStorage: (Boolean) -> Unit
+    onExport: () -> Unit,
+    onImport: () -> Unit
 ) {
     val navController = rememberNavController()
 
@@ -156,7 +175,8 @@ fun AppNavigation(
             SettingsScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
-                onToggleDeviceStorage = onToggleDeviceStorage
+                onExport = onExport,
+                onImport = onImport
             )
         }
     }

@@ -71,7 +71,8 @@ private val ACCENTS = listOf(
 fun SettingsScreen(
     viewModel: TodoViewModel,
     onBack: () -> Unit,
-    onToggleDeviceStorage: (Boolean) -> Unit = {}
+    onExport: () -> Unit = {},
+    onImport: () -> Unit = {}
 ) {
     val settings by viewModel.settings.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -350,8 +351,8 @@ fun SettingsScreen(
                 }
             }
 
-            // ---- Device storage ----
-            SectionTitle("Device Storage")
+            // ---- Backup & Restore ----
+            SectionTitle("Backup & Restore")
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
@@ -360,27 +361,23 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Save to device storage",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Text(
-                                if (viewModel.isDeviceStorageEnabled)
-                                    "✅ Mirrored to Downloads/Todo-app so tasks survive an app uninstall."
-                                else "Keep a copy in Downloads/Todo-app on your phone.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = viewModel.isDeviceStorageEnabled,
-                            onCheckedChange = onToggleDeviceStorage
-                        )
+                    Text(
+                        "Save all your tasks and settings to a file, or restore from one.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = onExport,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Export data") }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = onImport,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Import data") }
                     }
                 }
             }

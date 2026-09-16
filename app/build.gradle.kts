@@ -12,8 +12,8 @@ android {
         applicationId = "com.tushar.sharma.logic.todo"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "2.6"
+        versionCode = 9
+        versionName = "2.7"
 
         vectorDrawables {
             useSupportLibrary = true
