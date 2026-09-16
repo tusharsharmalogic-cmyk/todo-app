@@ -12,4 +12,4 @@ local.properties
 *.aab
 *.keystore
 !debug.keystore
-!.keystore/todo-release.jks
+!.keystore/todo-release.jksbuild_log.txt
