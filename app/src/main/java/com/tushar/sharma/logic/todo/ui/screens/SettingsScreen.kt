@@ -71,7 +71,7 @@ private val ACCENTS = listOf(
 fun SettingsScreen(
     viewModel: TodoViewModel,
     onBack: () -> Unit,
-    onPickFolder: () -> Unit = {}
+    onToggleDeviceStorage: (Boolean) -> Unit = {}
 ) {
     val settings by viewModel.settings.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -350,8 +350,8 @@ fun SettingsScreen(
                 }
             }
 
-            // ---- Storage backup ----
-            SectionTitle("Data Backup")
+            // ---- Device storage ----
+            SectionTitle("Device Storage")
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
@@ -360,41 +360,28 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Save tasks to a folder on your phone so they survive an app uninstall.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    val hasFolder = viewModel.hasExternalFolder
-                    Text(
-                        if (hasFolder) "✅ Backup folder set"
-                        else "⚠️ Backup folder not set",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = onPickFolder,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (hasFolder) "Change folder" else "Pick folder")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Save to device storage",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                if (viewModel.isDeviceStorageEnabled)
+                                    "✅ Mirrored to Downloads/Todo-app so tasks survive an app uninstall."
+                                else "Keep a copy in Downloads/Todo-app on your phone.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        if (hasFolder) {
-                            androidx.compose.material3.OutlinedButton(
-                                onClick = { viewModel.clearExternalFolder() },
-                                shape = RoundedCornerShape(12.dp)
-                            ) { Text("Remove") }
-                        }
+                        Switch(
+                            checked = viewModel.isDeviceStorageEnabled,
+                            onCheckedChange = onToggleDeviceStorage
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Tip: choose the 'Todo-app' folder in /sdcard/ (create it if needed).",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
 

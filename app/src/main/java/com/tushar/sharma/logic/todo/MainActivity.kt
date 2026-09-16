@@ -42,12 +42,23 @@ class MainActivity : ComponentActivity() {
     private val notifPermLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    private val folderPickerLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri != null) {
-                viewModel.onFolderPicked(uri)
-            }
+    private val storagePermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) viewModel.setDeviceStorageEnabled(true)
         }
+
+    private fun handleDeviceStorageToggle(enable: Boolean) {
+        val needsPermission = enable &&
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            viewModel.setDeviceStorageEnabled(enable)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,7 +104,7 @@ class MainActivity : ComponentActivity() {
                         )
                         else -> AppNavigation(
                             viewModel = viewModel,
-                            onPickFolder = { folderPickerLauncher.launch(null) }
+                            onToggleDeviceStorage = ::handleDeviceStorageToggle
                         )
                     }
                 }
@@ -105,7 +116,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation(
     viewModel: TodoViewModel,
-    onPickFolder: () -> Unit
+    onToggleDeviceStorage: (Boolean) -> Unit
 ) {
     val navController = rememberNavController()
 
@@ -145,7 +156,7 @@ fun AppNavigation(
             SettingsScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
-                onPickFolder = onPickFolder
+                onToggleDeviceStorage = onToggleDeviceStorage
             )
         }
     }

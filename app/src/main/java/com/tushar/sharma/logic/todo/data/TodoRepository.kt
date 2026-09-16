@@ -1,11 +1,14 @@
 package com.tushar.sharma.logic.todo.data
 
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
-import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -13,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
 
 private val Context.dataStore by preferencesDataStore(name = "todo_prefs")
 
@@ -20,73 +24,120 @@ class TodoRepository(private val context: Context) {
 
     companion object {
         const val PREFS = "todo_storage_prefs"
-        const val KEY_TREE_URI = "tree_uri"
+        const val KEY_DEVICE_STORAGE_ENABLED = "device_storage_enabled"
+        private const val SUBFOLDER = "Todo-app"
+        private const val TODOS_FILE = "todos.json"
+        private const val SETTINGS_FILE = "settings.json"
     }
 
     private val TODOS_KEY = stringPreferencesKey("todos_json")
     private val SETTINGS_KEY = stringPreferencesKey("settings_json")
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
-    val hasExternalFolder: Boolean
-        get() = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_TREE_URI, null) != null
-
-    private fun treePrefs() =
+    private fun storagePrefs() =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun setExternalFolder(uri: Uri) {
-        val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-            android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        try {
-            context.contentResolver.takePersistableUriPermission(uri, flags)
-        } catch (_: Exception) {}
-        treePrefs().edit().putString(KEY_TREE_URI, uri.toString()).apply()
+    /** Whether tasks/settings are mirrored to public device storage (Downloads/Todo-app). */
+    val isDeviceStorageEnabled: Boolean
+        get() = storagePrefs().getBoolean(KEY_DEVICE_STORAGE_ENABLED, false)
+
+    /** Turns device-storage sync on/off. When turning on: import existing files if present, else push current data out. */
+    suspend fun setDeviceStorageEnabled(enabled: Boolean) = withContext(Dispatchers.IO) {
+        storagePrefs().edit().putBoolean(KEY_DEVICE_STORAGE_ENABLED, enabled).apply()
+        if (enabled) {
+            val imported = importFromDeviceStorage()
+            if (!imported) exportToDeviceStorage()
+        }
     }
 
-    fun clearExternalFolder() {
-        treePrefs().edit().remove(KEY_TREE_URI).apply()
-    }
+    // -------- Legacy (API < 29): direct file in public Downloads/Todo-app --------
 
-    private fun getRootDoc(): DocumentFile? {
-        val uriStr = treePrefs().getString(KEY_TREE_URI, null) ?: return null
+    private fun legacyDir(): File? {
         return try {
-            DocumentFile.fromTreeUri(context, Uri.parse(uriStr))
+            val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val dir = File(downloads, SUBFOLDER)
+            if (!dir.exists()) dir.mkdirs()
+            dir
         } catch (_: Exception) { null }
     }
 
-    /** Read a file's text from SAF (returns null if not found / not readable). */
-    private fun readExternal(name: String): String? {
-        val root = getRootDoc() ?: return null
-        val file = root.findFile(name) ?: return null
+    private fun legacyRead(name: String): String? {
+        val dir = legacyDir() ?: return null
+        val file = File(dir, name)
         return try {
-            context.contentResolver.openInputStream(file.uri)?.use {
+            if (file.exists()) file.readText() else null
+        } catch (_: Exception) { null }
+    }
+
+    private fun legacyWrite(name: String, text: String): Boolean {
+        val dir = legacyDir() ?: return false
+        return try {
+            File(dir, name).writeText(text)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // -------- Modern (API 29+): MediaStore Downloads collection --------
+
+    private fun mediaStoreRelativePath(): String =
+        Environment.DIRECTORY_DOWNLOADS + File.separator + SUBFOLDER + File.separator
+
+    private fun mediaStoreFindUri(name: String): android.net.Uri? {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
+        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?"
+        val args = arrayOf(name, mediaStoreRelativePath())
+        return try {
+            resolver.query(collection, projection, selection, args, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    ContentUris.withAppendedId(collection, cursor.getLong(0))
+                } else null
+            }
+        } catch (_: Exception) { null }
+    }
+
+    private fun mediaStoreRead(name: String): String? {
+        val uri = mediaStoreFindUri(name) ?: return null
+        return try {
+            context.contentResolver.openInputStream(uri)?.use {
                 it.bufferedReader().readText()
             }
         } catch (_: Exception) { null }
     }
 
-    /** Write a file's text to SAF (best-effort; never throws). */
-    private fun writeExternal(name: String, text: String): Boolean {
-        val root = getRootDoc() ?: return false
+    private fun mediaStoreWrite(name: String, text: String): Boolean {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
         return try {
-            val file = root.findFile(name)
-                ?: root.createFile("application/json", name)
-                ?: return false
-            context.contentResolver.openOutputStream(file.uri, "wt")?.use {
+            val uri = mediaStoreFindUri(name) ?: run {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, mediaStoreRelativePath())
+                }
+                resolver.insert(collection, values)
+            } ?: return false
+            resolver.openOutputStream(uri, "wt")?.use {
                 it.bufferedWriter().write(text)
             }
             true
         } catch (_: Exception) { false }
     }
 
-    /** Called after the user picks a folder: imports existing data if present. */
-    suspend fun importFromExternal(): Boolean = withContext(Dispatchers.IO) {
-        val todosRaw = readExternal("todos.json")
-        val settingsRaw = readExternal("settings.json")
+    private fun readDeviceFile(name: String): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) mediaStoreRead(name) else legacyRead(name)
+
+    private fun writeDeviceFile(name: String, text: String): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) mediaStoreWrite(name, text) else legacyWrite(name, text)
+
+    /** Called after device storage is turned on: imports existing data if present. */
+    suspend fun importFromDeviceStorage(): Boolean = withContext(Dispatchers.IO) {
+        val todosRaw = readDeviceFile(TODOS_FILE)
+        val settingsRaw = readDeviceFile(SETTINGS_FILE)
         if (todosRaw == null && settingsRaw == null) return@withContext false
         try {
             context.dataStore.edit { prefs ->
-                // validate todos
                 if (todosRaw != null) {
                     json.decodeFromString<List<Todo>>(todosRaw)
                     prefs[TODOS_KEY] = todosRaw
@@ -100,13 +151,13 @@ class TodoRepository(private val context: Context) {
         } catch (_: Exception) { false }
     }
 
-    /** Push current DataStore contents to the external folder (initial mirror). */
-    suspend fun exportToExternal() = withContext(Dispatchers.IO) {
-        if (!hasExternalFolder) return@withContext
+    /** Push current DataStore contents to device storage (initial mirror). */
+    suspend fun exportToDeviceStorage() = withContext(Dispatchers.IO) {
+        if (!isDeviceStorageEnabled) return@withContext
         try {
             val prefs = context.dataStore.data.first()
-            prefs[TODOS_KEY]?.let { writeExternal("todos.json", it) }
-            prefs[SETTINGS_KEY]?.let { writeExternal("settings.json", it) }
+            prefs[TODOS_KEY]?.let { writeDeviceFile(TODOS_FILE, it) }
+            prefs[SETTINGS_KEY]?.let { writeDeviceFile(SETTINGS_FILE, it) }
         } catch (_: Exception) {}
     }
 
@@ -129,9 +180,9 @@ class TodoRepository(private val context: Context) {
     suspend fun save(list: List<Todo>) {
         val payload = json.encodeToString(list)
         context.dataStore.edit { prefs -> prefs[TODOS_KEY] = payload }
-        // Best-effort async mirror to SAF (never blocks UI, never throws)
+        // Best-effort async mirror to device storage (never blocks UI, never throws)
         withContext(Dispatchers.IO) {
-            if (hasExternalFolder) writeExternal("todos.json", payload)
+            if (isDeviceStorageEnabled) writeDeviceFile(TODOS_FILE, payload)
         }
     }
 
@@ -139,7 +190,7 @@ class TodoRepository(private val context: Context) {
         val payload = json.encodeToString(s)
         context.dataStore.edit { prefs -> prefs[SETTINGS_KEY] = payload }
         withContext(Dispatchers.IO) {
-            if (hasExternalFolder) writeExternal("settings.json", payload)
+            if (isDeviceStorageEnabled) writeDeviceFile(SETTINGS_FILE, payload)
         }
     }
 }

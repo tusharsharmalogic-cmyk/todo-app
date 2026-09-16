@@ -285,22 +285,12 @@ class TodoViewModel(app: Application) : AndroidViewModel(app) {
 
     fun verifyPin(pin: String): Boolean = settings.value.pinCode == pin
 
-    // -------- Storage folder (SAF) --------
+    // -------- Device storage sync --------
 
-    val hasExternalFolder: Boolean get() = repo.hasExternalFolder
+    val isDeviceStorageEnabled: Boolean get() = repo.isDeviceStorageEnabled
 
-    fun onFolderPicked(uri: android.net.Uri) {
-        repo.setExternalFolder(uri)
-        viewModelScope.launch {
-            // If the folder already contains backups, import them into DataStore.
-            val imported = repo.importFromExternal()
-            // Otherwise push current data out as initial mirror.
-            if (!imported) repo.exportToExternal()
-        }
-    }
-
-    fun clearExternalFolder() {
-        repo.clearExternalFolder()
+    fun setDeviceStorageEnabled(enabled: Boolean) {
+        viewModelScope.launch { repo.setDeviceStorageEnabled(enabled) }
     }
 
     // Stats
