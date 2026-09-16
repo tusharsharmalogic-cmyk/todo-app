@@ -59,11 +59,12 @@ import java.util.Locale
 fun TodoItem(
     todo: Todo,
     categories: List<Category>,
-    onClick: () -> Unit,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit,
+    onClick: (() -> Unit)?,
+    onToggle: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
+    readOnly: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val priorityColor = when (todo.priority) {
@@ -97,6 +98,7 @@ fun TodoItem(
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = !readOnly,
         backgroundContent = {
             val isSwiping = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
             val bgColor = if (isSwiping) MaterialTheme.colorScheme.errorContainer
@@ -128,12 +130,10 @@ fun TodoItem(
                     color = borderColor,
                     shape = RoundedCornerShape(20.dp)
                 ),
-            onClick = onClick,
+            onClick = { onClick?.invoke() },
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBgColor),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = if (todo.isDone) 0.dp else 2.dp
-            )
+            colors = CardDefaults.cardColors(containerColor = if (todo.isOverdue) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f) else cardBgColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (todo.isDone) 0.dp else 2.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -152,7 +152,8 @@ fun TodoItem(
 
                 // Toggle button
                 IconButton(
-                    onClick = onToggle,
+                    onClick = { onToggle?.invoke() },
+                    enabled = !readOnly,
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
@@ -208,19 +209,26 @@ fun TodoItem(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
-                        if (todo.dueDate != null) {
+                        val dlMs = todo.deadlineMillis
+                        if (dlMs != null) {
                             val fmt = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
-                            val label = fmt.format(Date(todo.dueDate))
-                            val dueColor = if (todo.isOverdue)
-                                MaterialTheme.colorScheme.error
+                            val label = fmt.format(Date(dlMs))
+                            val dueColor = if (todo.isOverdue) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant
                             Text(
                                 text = (if (todo.isOverdue) "⏰ " else "📅 ") + label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = dueColor,
-                                fontWeight = if (todo.isOverdue) FontWeight.SemiBold
-                                else FontWeight.Normal
+                                style = MaterialTheme.typography.labelSmall, color = dueColor,
+                                fontWeight = if (todo.isOverdue) FontWeight.SemiBold else FontWeight.Normal
                             )
+                        }
+                        if (todo.isRepeat) {
+                            Text("🔁", style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (todo.isDone && todo.completedAt != null) {
+                            val cFmt = SimpleDateFormat("dd MMM", Locale.getDefault())
+                            Text("✓ ${cFmt.format(Date(todo.completedAt))}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
                 }

@@ -264,46 +264,43 @@ fun SettingsScreen(
                 }
             }
 
-            // ---- Default reminder ----
-            SectionTitle("Default Reminder")
+            // ---- Default Deadline ----
+            SectionTitle("Default Deadline")
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        "Pre-selected when adding a task with a due date",
+                        "Auto-set deadline when adding a task. 0 = today, 1 = tomorrow, etc.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(10.dp))
-                    val opts = listOf<Pair<String, Int?>>(
-                        "None" to null,
-                        "At time" to 0,
-                        "5 min" to 5,
-                        "15 min" to 15,
-                        "1 hour" to 60
-                    )
-                    androidx.compose.foundation.lazy.LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(opts.size) { idx ->
-                            val (label, value) = opts[idx]
-                            FilterChip(
-                                selected = settings.defaultReminderMinutes == value,
-                                onClick = {
-                                    viewModel.updateSettings(
-                                        settings.copy(defaultReminderMinutes = value)
-                                    )
-                                },
-                                label = { Text(label) },
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Days from today:", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            if (settings.defaultDeadlineDays > 0)
+                                viewModel.updateSettings(settings.copy(defaultDeadlineDays = settings.defaultDeadlineDays - 1))
+                        }) { Icon(Icons.Rounded.KeyboardArrowDown, null) }
+                        Text(
+                            "${settings.defaultDeadlineDays}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        IconButton(onClick = {
+                            viewModel.updateSettings(settings.copy(defaultDeadlineDays = settings.defaultDeadlineDays + 1))
+                        }) { Icon(Icons.Rounded.KeyboardArrowUp, null) }
                     }
+                    val label = when (settings.defaultDeadlineDays) {
+                        0 -> "Today (end of day)"
+                        1 -> "Tomorrow"
+                        else -> "In ${settings.defaultDeadlineDays} days"
+                    }
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
 
