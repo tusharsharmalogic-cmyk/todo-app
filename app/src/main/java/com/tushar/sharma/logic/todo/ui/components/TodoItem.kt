@@ -89,7 +89,7 @@ fun TodoItem(
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete()
+                onDelete?.invoke()
             }
             false
         }
